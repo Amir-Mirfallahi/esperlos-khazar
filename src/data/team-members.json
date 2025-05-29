@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "name": "مهندس مصطفی عنایت",
+    "position": "عضو پایه ارشد نظام مهندسی تهران - رئیس شرکت",
+    "image": "/images/team/member1.jpg"
+  },
+  {
+    "id": 2,
+    "name": "مهندس امیرمحمد عنایت",
+    "position": "عضو اصلی شرکت و ناظر و مجری پروژه ها",
+    "image": "/images/team/member2.jpg"
+  },
+  {
+    "id": 3,
+    "name": "فاطمه حسین ادیبی",
+    "position": "مدیرعامل شرکت و تکنسین آی تی شرکت",
+    "image": "/images/team/member3.jpg"
+  },
+  {
+    "id": 4,
+    "name": "محمد رحمت فلاح",
+    "position": "تکنسین برق شرکت",
+    "image": "/images/team/member4.jpg"
+  },
+  {
+    "id": 5,
+    "name": "کسری ابوالحسنی",
+    "position": "دیپلم فنی و کاردان رشته برق",
+    "image": "/images/team/member5.jpg"
+  },
+  {
+    "id": 6,
+    "name": "امیر حسین کیاپاشا",
+    "position": "دیپلمه برق شرکت",
+    "image": "/images/team/member6.jpg"
+  },
+  {
+    "id": 7,
+    "name": "علی گیلانی",
+    "position": "دفتر دار شرکت",
+    "image": "/images/team/member7.jpg"
+  }
+]

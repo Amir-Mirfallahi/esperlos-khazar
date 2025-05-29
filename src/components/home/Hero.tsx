@@ -20,13 +20,20 @@ const Hero = () => {
 
       <div className="section-container relative z-10">
         <div className="max-w-3xl mx-auto text-center">
-          <h1 className="text-3xl md:text-5xl font-bold mb-6 animate-fade-in">
+          <h1
+            className="text-3xl md:text-5xl font-bold mb-6"
+            data-aos="fade-down"
+          >
             <span className="text-secondary">پارس گستر اسپرلوس خزر</span>
             <br />
             <span className="mt-2 block">پیشرو در صنعت برق و امنیت</span>
           </h1>
 
-          <p className="text-lg md:text-xl text-gray-200 mb-8 animate-slide-in-bottom">
+          <p
+            className="text-lg md:text-xl text-gray-200 mb-8"
+            data-aos="fade-up"
+            data-aos-delay="100"
+          >
             ارائه دهنده راهکارهای نوین و با کیفیت در زمینه
             <span className="text-secondary"> تجهیزات الکتریکی، </span>
             <span className="text-secondary">انتقال قدرت </span>و
@@ -34,8 +41,9 @@ const Hero = () => {
           </p>
 
           <div
-            className="flex flex-col sm:flex-row gap-4 justify-center mt-8 animate-slide-in-bottom"
-            style={{ animationDelay: "0.2s" }}
+            className="flex flex-col sm:flex-row gap-4 justify-center mt-8"
+            data-aos="fade-up"
+            data-aos-delay="300"
           >
             <Button to="/products" size="lg" variant="secondary">
               مشاهده محصولات
