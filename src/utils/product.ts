@@ -143,9 +143,26 @@ export const getFeaturedProducts = async (
   };
 };
 
-export const createProduct = async (product: Product) => {
+export const createProduct = async (
+  productData: Omit<Product, "id" | "createdAt" | "updatedAt">,
+  imagesData?: Array<{ imageUrl: string; publicId: string }>
+) => {
   const newProduct = await prisma.product.create({
-    data: product,
+    data: {
+      ...productData,
+      images:
+        imagesData && imagesData.length > 0
+          ? {
+              create: imagesData.map((img) => ({
+                imageUrl: img.imageUrl,
+                publicId: img.publicId,
+              })),
+            }
+          : undefined,
+    },
+    include: {
+      images: true,
+    },
   });
   return newProduct;
 };

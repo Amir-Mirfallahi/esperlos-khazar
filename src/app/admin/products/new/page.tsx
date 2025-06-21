@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent, FormEvent } from "react";
 import { AuthCheck } from "@/components/auth/AuthCheck";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import { PulseLoader } from "react-spinners";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { FiUploadCloud, FiXCircle } from "react-icons/fi";
 
 interface Category {
   id: number;
@@ -18,6 +19,8 @@ export default function NewProductPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -33,13 +36,12 @@ export default function NewProductPage() {
     const fetchCategories = async () => {
       try {
         const response = await axios.get("/api/protected/categories");
-        const categories = response.data;
-        setCategories(categories);
-        // Set default category if available
-        if (categories.length > 0) {
+        const categoriesData = response.data;
+        setCategories(categoriesData);
+        if (categoriesData.length > 0) {
           setFormData((prev) => ({
             ...prev,
-            categoryId: String(categories[0].id),
+            categoryId: String(categoriesData[0].id),
           }));
         }
       } catch (error) {
@@ -54,9 +56,7 @@ export default function NewProductPage() {
   }, []);
 
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
+    e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
     const { name, value, type } = e.target as HTMLInputElement;
 
@@ -74,13 +74,42 @@ export default function NewProductPage() {
     }
   };
 
+  // Handle file selection
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setSelectedFiles((prevFiles) => [...prevFiles, ...filesArray]);
+
+      // Generate image previews
+      const newPreviews = filesArray.map((file) => URL.createObjectURL(file));
+      setImagePreviews((prevPreviews) => [...prevPreviews, ...newPreviews]);
+    }
+  };
+
+  // Remove a selected image
+  const handleRemoveImage = (index: number) => {
+    setSelectedFiles((prevFiles) => prevFiles.filter((_, i) => i !== index));
+    setImagePreviews((prevPreviews) => {
+      const newPreviews = prevPreviews.filter((_, i) => i !== index);
+      URL.revokeObjectURL(prevPreviews[index]);
+      return newPreviews;
+    });
+  };
+
+  // Cleanup object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach((preview) => URL.revokeObjectURL(preview));
+    };
+  }, [imagePreviews]);
+
   const handleSlugGeneration = () => {
     if (formData.name && !formData.slug) {
-      // Very simple slug generator - for production, use a more robust solution
       const slug = formData.name
         .toLowerCase()
-        .replace(/[^\w\s-]/g, "")
-        .replace(/\s+/g, "-");
+        .replace(/[^\\w\\s-]/g, "")
+        .replace(/\\s+/g, "-")
+        .replace(/--+/g, "-");
       setFormData({
         ...formData,
         slug,
@@ -88,30 +117,61 @@ export default function NewProductPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    try {
-      // Validate required fields
-      if (
-        !formData.name ||
-        !formData.slug ||
-        !formData.price ||
-        !formData.categoryId
-      ) {
-        toast.error("لطفاً تمام فیلدهای ضروری را پر کنید");
-        setIsSubmitting(false);
-        return;
-      }
+    // Validate required fields
+    if (
+      !formData.name ||
+      !formData.slug ||
+      !formData.price ||
+      !formData.categoryId
+    ) {
+      toast.error("لطفاً تمام فیلدهای ضروری را پر کنید");
+      setIsSubmitting(false);
+      return;
+    }
 
-      const response = await axios.post("/api/protected/products", formData);
+    const submissionFormData = new FormData();
+    submissionFormData.append("name", formData.name);
+    submissionFormData.append("slug", formData.slug);
+    submissionFormData.append("price", formData.price);
+    submissionFormData.append("categoryId", formData.categoryId);
+    submissionFormData.append("description", formData.description);
+    submissionFormData.append("isFeatured", String(formData.isFeatured));
+
+    if (selectedFiles.length === 0) {
+      // toast.error("لطفاً حداقل یک تصویر برای محصول انتخاب کنید.");
+      // setIsSubmitting(false);
+      // return;
+      // Allowing product creation without images based on previous backend logic
+    }
+
+    selectedFiles.forEach((file) => {
+      submissionFormData.append("images", file);
+    });
+
+    try {
+      const response = await axios.post(
+        "/api/protected/products",
+        submissionFormData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        }
+      );
       toast.success("محصول با موفقیت ایجاد شد");
       router.push("/admin/products");
     } catch (error: any) {
       console.error("Error creating product:", error);
-      const errorMessage = error.response?.data?.error || "خطا در ایجاد محصول";
+      const errorMessage =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        "خطا در ایجاد محصول";
       toast.error(errorMessage);
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -164,8 +224,8 @@ export default function NewProductPage() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     نام محصول *
                   </label>
@@ -180,7 +240,7 @@ export default function NewProductPage() {
                   />
                 </div>
 
-                <div className="col-span-2">
+                <div className="md:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     اسلاگ (نامک) *
                   </label>
@@ -200,7 +260,7 @@ export default function NewProductPage() {
                   </p>
                 </div>
 
-                <div>
+                <div className="md:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     قیمت (تومان) *
                   </label>
@@ -215,7 +275,7 @@ export default function NewProductPage() {
                   />
                 </div>
 
-                <div>
+                <div className="md:col-span-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     دسته‌بندی *
                   </label>
@@ -227,14 +287,14 @@ export default function NewProductPage() {
                     className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   >
                     {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
+                      <option key={category.id} value={String(category.id)}>
                         {category.name}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="col-span-2">
+                <div className="col-span-1 md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     توضیحات
                   </label>
@@ -246,6 +306,70 @@ export default function NewProductPage() {
                     className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   ></textarea>
                 </div>
+
+                <div className="col-span-1 md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    تصاویر محصول (حداکثر ۵ تصویر)
+                  </label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                    <div className="space-y-1 text-center">
+                      <FiUploadCloud className="mx-auto h-12 w-12 text-gray-400" />
+                      <div className="flex text-sm text-gray-600">
+                        <label
+                          htmlFor="file-upload"
+                          className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
+                        >
+                          <span>بارگذاری فایل‌ها</span>
+                          <input
+                            id="file-upload"
+                            name="images"
+                            type="file"
+                            multiple
+                            accept="image/*"
+                            onChange={handleFileChange}
+                            className="sr-only"
+                            disabled={selectedFiles.length >= 5}
+                          />
+                        </label>
+                        <p className="pl-1">یا بکشید و رها کنید</p>
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        PNG, JPG, GIF تا 10MB
+                      </p>
+                    </div>
+                  </div>
+                  {selectedFiles.length >= 5 && (
+                    <p className="mt-2 text-sm text-yellow-600">
+                      به حداکثر تعداد تصاویر (۵ تصویر) رسیده‌اید.
+                    </p>
+                  )}
+                </div>
+
+                {imagePreviews.length > 0 && (
+                  <div className="col-span-1 md:col-span-2 mt-4">
+                    <h3 className="text-md font-medium text-gray-700 mb-2">
+                      پیش‌نمایش تصاویر انتخاب شده:
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      {imagePreviews.map((previewUrl, index) => (
+                        <div key={index} className="relative group">
+                          <img
+                            src={previewUrl}
+                            alt={`Image ${index + 1}`}
+                            className="h-20 w-20 object-cover rounded-lg"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(index)}
+                            className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          >
+                            <FiXCircle className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="col-span-2">
                   <div className="flex items-center">

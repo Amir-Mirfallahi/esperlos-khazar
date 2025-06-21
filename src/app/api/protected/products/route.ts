@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getProducts, createProduct } from "@/utils/product";
 import prisma from "@/lib/prisma";
+import cloudinary from "@/lib/cloudinary"; // Adjust path if needed
 
 // GET /api/protected/products - Get all products
 export async function GET(request: Request) {
@@ -33,11 +34,9 @@ export async function GET(request: Request) {
 }
 
 // POST /api/protected/products - Create a new product
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-
-    // Check if user is authenticated and has appropriate role
     if (
       !session?.user ||
       !["SUPERADMIN", "PRODUCTMANAGER"].includes(session.user.role)
@@ -45,11 +44,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { name, slug, price, description, categoryId, isFeatured, images } =
-      await request.json();
+    const formData = await req.formData();
+    const productDataFields: { [key: string]: any } = {};
+    const imageFiles: File[] = [];
+
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        // Assuming files are sent with a key like 'images'
+        // Or any other key that might contain file(s)
+        imageFiles.push(value);
+      } else {
+        productDataFields[key] = value;
+      }
+    }
 
     // Validate required fields
-    if (!name || !slug || !price || !categoryId) {
+    if (
+      !productDataFields.name ||
+      !productDataFields.slug ||
+      !productDataFields.price ||
+      !productDataFields.categoryId
+    ) {
       return NextResponse.json(
         { error: "Name, slug, price, and category are required" },
         { status: 400 }
@@ -58,7 +73,7 @@ export async function POST(request: Request) {
 
     // Check if slug is unique
     const existingProduct = await prisma.product.findUnique({
-      where: { slug },
+      where: { slug: productDataFields.slug },
     });
 
     if (existingProduct) {
@@ -68,31 +83,103 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create the product
-    const product = await createProduct({
-      name,
-      slug,
-      price: parseInt(price),
-      description: description || "",
-      categoryId: parseInt(categoryId),
-      isFeatured: Boolean(isFeatured),
-    } as any);
+    const uploadedImagesDetails: Array<{ imageUrl: string; publicId: string }> =
+      [];
+    const uploadedPublicIds: string[] = [];
 
-    // Add product images if provided
-    if (images && Array.isArray(images) && images.length > 0) {
-      await prisma.productImage.createMany({
-        data: images.map((imageUrl: string) => ({
-          productId: product.id,
-          imageUrl,
-        })),
-      });
+    try {
+      for (const file of imageFiles) {
+        const bytes = await file.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+
+        const result = await new Promise<{
+          secure_url: string;
+          public_id: string;
+          error?: any;
+        }>((resolve, reject) => {
+          cloudinary.uploader
+            .upload_stream({ folder: "products" }, (error, uploadResult) => {
+              if (error) return reject(error);
+              if (uploadResult) {
+                return resolve(uploadResult);
+              }
+              return reject(
+                new Error("Cloudinary upload failed without error object.")
+              );
+            })
+            .end(buffer);
+        });
+
+        if (result.error) {
+          throw new Error(result.error.message || "Cloudinary upload failed");
+        }
+
+        uploadedImagesDetails.push({
+          imageUrl: result.secure_url,
+          publicId: result.public_id,
+        });
+        uploadedPublicIds.push(result.public_id);
+      }
+
+      const productToCreate = {
+        name: String(productDataFields.name),
+        slug: String(productDataFields.slug),
+        price: parseInt(String(productDataFields.price)),
+        description: productDataFields.description
+          ? String(productDataFields.description)
+          : "",
+        categoryId: parseInt(String(productDataFields.categoryId)),
+        isFeatured: Boolean(productDataFields.isFeatured),
+      };
+
+      // Now call your utility function
+      const newProduct = await createProduct(
+        productToCreate as any, // Type assertion might be needed depending on createProduct signature
+        uploadedImagesDetails
+      );
+
+      return NextResponse.json(
+        { message: "Product created successfully", product: newProduct },
+        { status: 201 }
+      );
+    } catch (uploadOrDbError) {
+      // If any error occurs after some images are uploaded, try to delete them from Cloudinary
+      if (uploadedPublicIds.length > 0) {
+        console.log(
+          "Attempting to delete uploaded images from Cloudinary due to error:",
+          uploadedPublicIds
+        );
+        for (const publicId of uploadedPublicIds) {
+          await cloudinary.uploader.destroy(publicId).catch((delError) => {
+            console.error(
+              "Failed to delete image from Cloudinary during cleanup:",
+              publicId,
+              delError
+            );
+          });
+        }
+      }
+      console.error(
+        "Error during product creation or image upload:",
+        uploadOrDbError
+      );
+      const errorMessage =
+        uploadOrDbError instanceof Error
+          ? uploadOrDbError.message
+          : "An unknown error occurred.";
+      return NextResponse.json(
+        { message: "Failed to create product", error: errorMessage },
+        { status: 500 }
+      );
     }
-
-    return NextResponse.json(product, { status: 201 });
   } catch (error) {
-    console.error("Error creating product:", error);
+    console.error("Error parsing form data or unexpected error:", error);
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "An internal server error occurred.";
     return NextResponse.json(
-      { error: "Internal server error" },
+      { message: "Internal server error", error: errorMessage },
       { status: 500 }
     );
   }
