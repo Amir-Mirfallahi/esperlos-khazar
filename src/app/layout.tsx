@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+// Removed Geist font imports
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "react-hot-toast";
@@ -7,15 +7,7 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import AOSProvider from "@/components/common/AOSProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// Removed duplicate Geist font imports and comments
 
 export const metadata: Metadata = {
   title: "پارس گستر اسپرلوس خزر",
@@ -29,7 +21,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fa" dir="rtl">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body>
         <AOSProvider>
           <div className="">
             <Header />
@@ -40,7 +32,7 @@ export default function RootLayout({
               toastOptions={{
                 duration: 3000,
                 style: {
-                  fontFamily: `var(--font-geist-sans)`,
+                  // fontFamily removed, will inherit from body
                   direction: "rtl",
                 },
               }}
