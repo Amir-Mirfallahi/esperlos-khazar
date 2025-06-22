@@ -6,7 +6,7 @@ const Hero = () => {
       className="relative bg-gray-900 text-white py-20 lg:py-32 overflow-hidden"
       style={{
         backgroundImage:
-          'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7)), url("/hero-background.jpg")',
+          'linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7))',
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
