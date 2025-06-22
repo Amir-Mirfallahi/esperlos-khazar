@@ -45,9 +45,11 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
+    console.log(formData);
+    
     const productDataFields: { [key: string]: any } = {};
     const imageFiles: File[] = [];
-
+    
     for (const [key, value] of formData.entries()) {
       if (value instanceof File) {
         // Assuming files are sent with a key like 'images'
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest) {
       !productDataFields.categoryId
     ) {
       return NextResponse.json(
-        { error: "Name, slug, price, and category are required" },
+        { error: "نام، اسلاگ، قیمت و دسته بندی واجب هستند." },
         { status: 400 }
       );
     }
@@ -78,7 +80,7 @@ export async function POST(req: NextRequest) {
 
     if (existingProduct) {
       return NextResponse.json(
-        { error: "A product with this slug already exists" },
+        { error: "یک محصول با این اسلاگ قبلا ساخته شده است." },
         { status: 400 }
       );
     }
