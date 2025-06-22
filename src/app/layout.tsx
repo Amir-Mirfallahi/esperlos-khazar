@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { GeistSans } from "@vercel/geist-font/sans";
+import { GeistMono } from "@vercel/geist-font/mono";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Toaster } from "react-hot-toast";
@@ -7,15 +8,12 @@ import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import AOSProvider from "@/components/common/AOSProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+// Correctly import and use GeistSans and GeistMono
+// GeistSans itself provides the necessary CSS variable setup when imported.
+// If you need both sans and mono:
+import { GeistSans } from "@vercel/geist-font/sans";
+import { GeistMono } from "@vercel/geist-font/mono";
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "پارس گستر اسپرلوس خزر",
@@ -28,8 +26,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="fa" dir="rtl">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="fa" dir="rtl" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body>
         <AOSProvider>
           <div className="">
             <Header />
