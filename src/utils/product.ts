@@ -1,5 +1,8 @@
 import { Product } from "@prisma/client";
 import prisma from "../lib/prisma";
+import { DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { s3 } from "@/lib/s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 export type paginatedProducts = {
   products: Product[];
@@ -47,6 +50,17 @@ export const getProducts = async (
     prisma.product.count(),
   ]);
 
+  for (const product of products) {
+    for (const image of product.images) {
+      const command = new GetObjectCommand({
+        Bucket: process.env.LIARA_BUCKET_NAME,
+        Key: image.s3key,
+      });
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      image.imageUrl = url;
+    }
+  }
+
   return {
     products,
     meta: {
@@ -66,7 +80,21 @@ export const getProductCount = async () => {
 export const getProductById = async (id: string) => {
   const product = await prisma.product.findUnique({
     where: { id: parseInt(id) },
+    include: {
+      images: true,
+    },
   });
+  if (product) {
+    for (const image of product.images) {
+      const command = new GetObjectCommand({
+        Bucket: process.env.LIARA_BUCKET_NAME,
+        Key: image.s3key,
+      });
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      image.imageUrl = url;
+    }
+  }
+
   return product;
 };
 
@@ -78,6 +106,17 @@ export const getProductBySlug = async (slug: string) => {
       category: true,
     },
   });
+  if (product) {
+    for (const image of product.images) {
+      const command = new GetObjectCommand({
+        Bucket: process.env.LIARA_BUCKET_NAME,
+        Key: image.s3key,
+      });
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      image.imageUrl = url;
+    }
+  }
+
   return product;
 };
 
@@ -101,6 +140,16 @@ export const getProductsByCategory = async (
     }),
     prisma.product.count(),
   ]);
+  for (const product of products) {
+    for (const image of product.images) {
+      const command = new GetObjectCommand({
+        Bucket: process.env.LIARA_BUCKET_NAME,
+        Key: image.s3key,
+      });
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      image.imageUrl = url;
+    }
+  }
 
   return {
     products,
@@ -132,6 +181,17 @@ export const getFeaturedProducts = async (
     prisma.product.count(),
   ]);
 
+  for (const product of products) {
+    for (const image of product.images) {
+      const command = new GetObjectCommand({
+        Bucket: process.env.LIARA_BUCKET_NAME,
+        Key: image.s3key,
+      });
+      const url = await getSignedUrl(s3, command, { expiresIn: 3600 });
+      image.imageUrl = url;
+    }
+  }
+
   return {
     products,
     meta: {
@@ -145,7 +205,7 @@ export const getFeaturedProducts = async (
 
 export const createProduct = async (
   productData: Omit<Product, "id" | "createdAt" | "updatedAt">,
-  imagesData?: Array<{ imageUrl: string; publicId: string }>
+  imagesData?: Array<{ imageUrl: string; s3key: string }>
 ) => {
   const newProduct = await prisma.product.create({
     data: {
@@ -155,7 +215,7 @@ export const createProduct = async (
           ? {
               create: imagesData.map((img) => ({
                 imageUrl: img.imageUrl,
-                publicId: img.publicId,
+                s3key: img.s3key,
               })),
             }
           : undefined,
@@ -176,6 +236,20 @@ export const updateProduct = async (id: string, product: Product) => {
 };
 
 export const deleteProduct = async (id: string) => {
+  const uploadedKeys: string[] = [];
+  const productImages = await prisma.productImage.findMany({
+    where: {
+      productId: parseInt(id),
+    },
+  });
+  for (const key of uploadedKeys) {
+    const command = new DeleteObjectCommand({
+      Bucket: process.env.LIARA_BUCKET_NAME,
+      Key: key,
+    });
+
+    await s3.send(command);
+  }
   const deletedProduct = await prisma.product.delete({
     where: { id: parseInt(id) },
   });

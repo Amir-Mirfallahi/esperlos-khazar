@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getProducts, createProduct } from "@/utils/product";
 import prisma from "@/lib/prisma";
-import cloudinary from "@/lib/cloudinary"; // Adjust path if needed
+import { s3 } from "@/lib/s3";
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 
 // GET /api/protected/products - Get all products
 export async function GET(request: Request) {
@@ -45,13 +46,16 @@ export async function POST(req: NextRequest) {
     }
 
     const formData = await req.formData();
-    console.log(formData);
-    
+
     const productDataFields: { [key: string]: any } = {};
-    const imageFiles: File[] = [];
-    
+    const imageFiles: any[] = [];
+
     for (const [key, value] of formData.entries()) {
-      if (value instanceof File) {
+      if (
+        typeof value === "object" &&
+        typeof value.arrayBuffer === "function" &&
+        typeof value.name === "string"
+      ) {
         // Assuming files are sent with a key like 'images'
         // Or any other key that might contain file(s)
         imageFiles.push(value);
@@ -85,42 +89,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const uploadedImagesDetails: Array<{ imageUrl: string; publicId: string }> =
+    const uploadedImagesDetails: Array<{ imageUrl: string; s3key: string }> =
       [];
-    const uploadedPublicIds: string[] = [];
+    const uploadedKeys: string[] = [];
 
     try {
       for (const file of imageFiles) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
+        const filename = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
+        const key = `products/${Date.now()}_${filename}`;
 
-        const result = await new Promise<{
-          secure_url: string;
-          public_id: string;
-          error?: any;
-        }>((resolve, reject) => {
-          cloudinary.uploader
-            .upload_stream({ folder: "products" }, (error, uploadResult) => {
-              if (error) return reject(error);
-              if (uploadResult) {
-                return resolve(uploadResult);
-              }
-              return reject(
-                new Error("Cloudinary upload failed without error object.")
-              );
-            })
-            .end(buffer);
-        });
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: process.env.LIARA_BUCKET_NAME!,
+            Key: key,
+            Body: buffer,
+            ContentType: file.type,
+            ACL: "public-read",
+          })
+        );
 
-        if (result.error) {
-          throw new Error(result.error.message || "Cloudinary upload failed");
-        }
-
-        uploadedImagesDetails.push({
-          imageUrl: result.secure_url,
-          publicId: result.public_id,
-        });
-        uploadedPublicIds.push(result.public_id);
+        const url = `https://${process.env.LIARA_BUCKET_NAME}.storage.iran.liara.space/${key}`;
+        uploadedImagesDetails.push({ imageUrl: url, s3key: key });
+        uploadedKeys.push(key);
       }
 
       const productToCreate = {
@@ -146,19 +138,19 @@ export async function POST(req: NextRequest) {
       );
     } catch (uploadOrDbError) {
       // If any error occurs after some images are uploaded, try to delete them from Cloudinary
-      if (uploadedPublicIds.length > 0) {
+      if (uploadedKeys.length > 0) {
         console.log(
           "Attempting to delete uploaded images from Cloudinary due to error:",
-          uploadedPublicIds
+          uploadedKeys
         );
-        for (const publicId of uploadedPublicIds) {
-          await cloudinary.uploader.destroy(publicId).catch((delError) => {
-            console.error(
-              "Failed to delete image from Cloudinary during cleanup:",
-              publicId,
-              delError
-            );
+
+        for (const key of uploadedKeys) {
+          const command = new DeleteObjectCommand({
+            Bucket: process.env.LIARA_BUCKET_NAME,
+            Key: key,
           });
+
+          await s3.send(command);
         }
       }
       console.error(

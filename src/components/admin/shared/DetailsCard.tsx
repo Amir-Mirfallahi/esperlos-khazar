@@ -6,6 +6,7 @@ import axios from "axios";
 import InfoField, { InfoFieldProps } from "./InfoField";
 import { PulseLoader } from "react-spinners";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export interface DetailsCardProps {
   data: Record<string, any>;
