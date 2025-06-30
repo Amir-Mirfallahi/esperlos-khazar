@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getProductBySlug } from "@/utils/product";
-import React from "react";
+
 // GET /api/protected/products/:slug - Get a single product
 export async function GET(
   request: Request,

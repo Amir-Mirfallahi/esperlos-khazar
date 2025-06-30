@@ -248,6 +248,7 @@ export const updateProduct = async (
     },
     include: {
       images: true,
+      category: true,
     },
   });
   return updatedProduct;

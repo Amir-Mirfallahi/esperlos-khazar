@@ -170,7 +170,9 @@ export async function PATCH(
     const updatedProduct = await updateProduct(
       id,
       {
-        ...productDataFields,
+        name: productDataFields.name,
+        slug: productDataFields.slug,
+        description: productDataFields.description,
         price: productDataFields.price,
         categoryId: productDataFields.categoryId,
         isFeatured: productDataFields.isFeatured,

@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { getUserByEmail } from "@/utils/users";
 
 // Extend the default session and JWT types
@@ -10,7 +10,7 @@ declare module "next-auth" {
     id: string;
     role: string;
   }
-  
+
   interface Session {
     user: {
       id: string;
@@ -18,7 +18,7 @@ declare module "next-auth" {
       name?: string | null;
       email?: string | null;
       image?: string | null;
-    }
+    };
   }
 }
 
@@ -54,7 +54,7 @@ export const authOptions: NextAuthOptions = {
         );
 
         if (!isPasswordValid) {
-          throw new Error("رمز عبور اشتباه است");
+          throw new Error("نام کاربری یا رمز عبور اشتباه است.");
         }
 
         return {
@@ -96,4 +96,4 @@ export const { auth, signIn, signOut } = NextAuth(authOptions);
 
 // Export handlers with GET and POST methods for API route
 const handler = NextAuth(authOptions);
-export const handlers = { GET: handler, POST: handler }; 
+export const handlers = { GET: handler, POST: handler };
