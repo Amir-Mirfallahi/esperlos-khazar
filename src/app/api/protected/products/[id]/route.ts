@@ -3,6 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getProductById, updateProduct, deleteProduct } from "@/utils/product";
 import prisma from "@/lib/prisma";
+import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { s3 } from "@/lib/s3";
+import React from "react";
 
 // GET /api/protected/products/[id] - Get a single product
 export async function GET(
@@ -49,12 +52,14 @@ export async function GET(
 // PATCH /api/protected/products/[id] - Update a product
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const uploadedKeys: string[] = [];
+  const uploadedImagesDetails: { imageUrl: string; s3key: string }[] = [];
+
   try {
     const session = await getServerSession(authOptions);
 
-    // Check if user is authenticated and has appropriate role
     if (
       !session?.user ||
       !["SUPERADMIN", "PRODUCTMANAGER"].includes(session.user.role)
@@ -62,9 +67,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const id = params.id;
-
-    // Check if id is a valid number
+    const { id } = await params;
     if (isNaN(parseInt(id))) {
       return NextResponse.json(
         { error: "Invalid product ID" },
@@ -72,28 +75,40 @@ export async function PATCH(
       );
     }
 
-    const body = await request.json();
+    const formData = await request.formData();
+    const productDataFields: { [key: string]: any } = {};
+    const imageFiles: File[] = [];
 
-    // Process the price if it's in the body
-    if (body.price !== undefined) {
-      body.price = parseInt(body.price);
+    for (const [key, value] of formData.entries()) {
+      if (
+        typeof value === "object" &&
+        typeof value.arrayBuffer === "function" &&
+        typeof value.name === "string"
+      ) {
+        imageFiles.push(value);
+      } else {
+        productDataFields[key] = value;
+      }
     }
 
-    // Process categoryId if it's in the body
-    if (body.categoryId !== undefined) {
-      body.categoryId = parseInt(body.categoryId);
+    if (productDataFields.price !== undefined) {
+      productDataFields.price = parseInt(productDataFields.price);
     }
 
-    // Process isFeatured if it's in the body
-    if (body.isFeatured !== undefined) {
-      body.isFeatured = Boolean(body.isFeatured);
+    if (productDataFields.categoryId !== undefined) {
+      productDataFields.categoryId = parseInt(productDataFields.categoryId);
     }
 
-    // Check if slug exists and is unique
-    if (body.slug) {
+    if (productDataFields.isFeatured !== undefined) {
+      productDataFields.isFeatured =
+        productDataFields.isFeatured === "true" ||
+        productDataFields.isFeatured === true;
+    }
+
+    if (productDataFields.slug) {
       const existingProduct = await prisma.product.findFirst({
         where: {
-          slug: body.slug,
+          slug: productDataFields.slug,
           NOT: { id: parseInt(id) },
         },
       });
@@ -106,14 +121,86 @@ export async function PATCH(
       }
     }
 
-    // Update the product
-    const updatedProduct = await updateProduct(id, body as any);
+    if (productDataFields.removedS3Keys !== undefined) {
+      try {
+        const keys =
+          typeof productDataFields.removedS3Keys === "string"
+            ? JSON.parse(productDataFields.removedS3Keys)
+            : productDataFields.removedS3Keys;
 
-    return NextResponse.json(updatedProduct);
+        for (const key of keys) {
+          const command = new DeleteObjectCommand({
+            Bucket: process.env.LIARA_BUCKET_NAME,
+            Key: key,
+          });
+
+          await s3.send(command);
+        }
+      } catch (e) {
+        console.error("Error parsing removedS3Keys:", e);
+
+        return NextResponse.json(
+          { error: "Invalid format for removedS3Keys" },
+          { status: 400 }
+        );
+      }
+    }
+
+    for (const file of imageFiles) {
+      const bytes = await file.arrayBuffer();
+      const buffer = Buffer.from(bytes);
+      const filename = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
+      const key = `products/${Date.now()}_${filename}`;
+
+      await s3.send(
+        new PutObjectCommand({
+          Bucket: process.env.LIARA_BUCKET_NAME!,
+          Key: key,
+          Body: buffer,
+          ContentType: file.type,
+          ACL: "public-read",
+        })
+      );
+
+      const url = `https://${process.env.LIARA_BUCKET_NAME}.storage.iran.liara.space/${key}`;
+      uploadedImagesDetails.push({ imageUrl: url, s3key: key });
+      uploadedKeys.push(key);
+    }
+
+    const updatedProduct = await updateProduct(
+      id,
+      {
+        ...productDataFields,
+        price: productDataFields.price,
+        categoryId: productDataFields.categoryId,
+        isFeatured: productDataFields.isFeatured,
+      },
+      uploadedImagesDetails
+    );
+
+    return NextResponse.json({
+      message: "Product updated successfully",
+      product: updatedProduct,
+    });
   } catch (error) {
+    if (uploadedKeys.length > 0) {
+      for (const key of uploadedKeys) {
+        const command = new DeleteObjectCommand({
+          Bucket: process.env.LIARA_BUCKET_NAME,
+          Key: key,
+        });
+        await s3.send(command);
+      }
+    }
+
     console.error("Error updating product:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Failed to update product due to unknown error",
+      },
       { status: 500 }
     );
   }

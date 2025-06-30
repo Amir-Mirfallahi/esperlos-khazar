@@ -227,10 +227,28 @@ export const createProduct = async (
   return newProduct;
 };
 
-export const updateProduct = async (id: string, product: Product) => {
+export const updateProduct = async (
+  id: string,
+  productData: Partial<Omit<Product, "id" | "createdAt" | "updatedAt">>,
+  imagesData?: Array<{ imageUrl: string; s3key: string }>
+) => {
   const updatedProduct = await prisma.product.update({
-    where: { id: parseInt(id) },
-    data: product,
+    where: { id: parseInt(id, 10) },
+    data: {
+      ...productData,
+      images:
+        imagesData && imagesData.length > 0
+          ? {
+              create: imagesData.map((img) => ({
+                imageUrl: img.imageUrl,
+                s3key: img.s3key,
+              })),
+            }
+          : undefined,
+    },
+    include: {
+      images: true,
+    },
   });
   return updatedProduct;
 };
