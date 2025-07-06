@@ -45,13 +45,17 @@ export const authOptions: NextAuthOptions = {
         const user = await getUserByEmail(credentials.email);
 
         if (!user) {
-          throw new Error("کاربری با این ایمیل یافت نشد");
+          throw new Error("نام کاربری یا رمز عبور اشتباه است.");
         }
+
+        console.log(credentials.password);
+        console.log(user.password);
 
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password
         );
+        console.log(isPasswordValid);
 
         if (!isPasswordValid) {
           throw new Error("نام کاربری یا رمز عبور اشتباه است.");

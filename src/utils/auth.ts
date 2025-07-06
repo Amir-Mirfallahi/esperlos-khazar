@@ -16,16 +16,13 @@ export async function registerUser(userData: RegisterUserData) {
     throw new Error("کاربری با این ایمیل قبلا ثبت شده است");
   }
 
-  // Hash the password
-  const hashedPassword = await bcrypt.hash(userData.password, 12);
-
   // Create the user with hashed password and default user role
   const newUser = await createUser({
     // id is auto-generated, so it's not needed in the creation object
     firstName: userData.firstName,
     lastName: userData.lastName,
     email: userData.email,
-    password: hashedPassword,
+    password: userData.password,
     role: userData.email === "admin@admin.com" ? Role.SUPERADMIN : Role.USER,
     createdAt: new Date(),
     updatedAt: new Date(),

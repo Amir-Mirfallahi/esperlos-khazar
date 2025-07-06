@@ -16,7 +16,6 @@ const registerSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    console.log("→ DATABASE_URL:", process.env.DATABASE_URL);
     // Parse and validate request body
     const body = await req.json();
     const result = registerSchema.safeParse(body);

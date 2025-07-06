@@ -115,6 +115,7 @@ export const changeUserPassword = async (
 
 export const createUser = async (user: NewUser) => {
   const hashedPassword = await bcrypt.hash(user.password, 12);
+
   const newUser = await prisma.user.create({
     data: {
       firstName: user.firstName,
